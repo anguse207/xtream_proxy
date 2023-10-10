@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc, time::Instant};
+use std::{net::SocketAddr, sync::Arc, time::{Instant, Duration}};
 
 use axum::{
     extract::{ConnectInfo, OriginalUri, State},
@@ -42,35 +42,44 @@ when reading from 2, write to 1
 */
 #[tokio::main]
 async fn main() {
-    let address = format!("{}:{}", HOST_ADDR, HOST_PORT);
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "xc_proxy=trace,tower_http=debug".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
 
-    println!("Listening on {address}");
+    let bind_address = format!("{}:{}", HOST_ADDR, HOST_PORT);
 
+    tracing::debug!("listening on {bind_address}");
+    tracing::info!("info");
     // <Client> is an arc internally, no need to put it in one
     let client = reqwest::Client::builder()
         .user_agent(USER_AGENT)
+        .timeout(Duration::from_secs(2))
         .build()
         .unwrap();
 
     // Create routes w/ states
     let app = Router::new()
-        .route("/*O", get(get_wildcard))
+        .route("/*O", get(proxy))
         //.route("/*O", get(tcp_proxy))
         .with_state(client);
 
     // Start Server
-    axum::Server::bind(&address.parse().unwrap())
+    axum::Server::bind(&bind_address.parse().unwrap())
         .serve(app.into_make_service_with_connect_info::<SocketAddr>())
         .await
         .unwrap();
 }
 
-async fn get_wildcard(
+async fn proxy(
     OriginalUri(original_uri): OriginalUri,
     State(client): State<Client>,
 ) -> impl IntoResponse {
     let target = format!("{SEND_PROTOCOL}://{SEND_ADDR}:{SEND_PORT}{original_uri}");
-
+    tracing::info!("=> {original_uri}");
     let byte_stream = client
         .get(&target)
         .send()
