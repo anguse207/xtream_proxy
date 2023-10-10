@@ -1,4 +1,7 @@
-use std::{net::SocketAddr};
+use std::{,
+    net::SocketAddr,
+    sync::Arc,
+};
 
 use axum::{
     extract::{State, OriginalUri},
@@ -34,9 +37,10 @@ async fn main() {
     
     println!("Listening on {address}");
 
-    let client = reqwest::Client::builder()
+    // put client in arc or once cell
+    let client = Arc::new(reqwest::Client::builder()
     .user_agent(USER_AGENT)
-    .build().unwrap();
+    .build().unwrap());
 
 
     // Create routes w/ states
