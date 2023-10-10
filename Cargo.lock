@@ -1505,6 +1505,7 @@ name = "xc_proxy"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "bytes",
  "reqwest",
  "serde_json",
  "tokio",
