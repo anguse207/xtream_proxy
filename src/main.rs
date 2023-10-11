@@ -2,7 +2,7 @@ use std::{net::SocketAddr, time::Duration};
 
 use axum::{
     body::StreamBody,
-    extract::{OriginalUri, State},
+    extract::{OriginalUri, ConnectInfo},
     response::IntoResponse,
     routing::get,
     Router,
@@ -11,6 +11,8 @@ use axum::{
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use reqwest::{self, Client};
+
+use once_cell::sync::Lazy;
 
 const USER_AGENT: &str = "tivimate";
 
@@ -23,6 +25,14 @@ const XC_ADDR: &str = "http://thelads.ddns.net:80";
 const _XC_USER: &str = "jN9AhFAHmf";
 const _XC_PASS: &str = "r9amExT7Qm";
 
+static CLIENT: Lazy<Client> = Lazy::new(|| {
+    reqwest::Client::builder()
+    .user_agent(USER_AGENT)
+    .timeout(Duration::from_secs(360))
+    .build()
+    .unwrap()
+});
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
@@ -33,17 +43,8 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    
-
-    // Client is an arc internally, no need to put it in one
-    let client = reqwest::Client::builder()
-        .user_agent(USER_AGENT)
-        .timeout(Duration::from_secs(2))
-        .build()
-        .unwrap();
-
     // Create routes w/ states
-    let app = Router::new().route("/*O", get(proxy)).with_state(client);
+    let app = Router::new().route("/*O", get(proxy));
     
     let bind_address = format!("{}:{}", HOST_ADDR, HOST_PORT);
     tracing::info!("listening on {bind_address}");
@@ -57,13 +58,13 @@ async fn main() {
 
 async fn proxy(
     OriginalUri(original_uri): OriginalUri,
-    State(client): State<Client>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse {
-    tracing::info!("=> {original_uri}");
+    tracing::info!("{addr} => {original_uri}");
 
     let target: String = format!("{XC_ADDR}{original_uri}");
 
-    let response = client.get(target).send().await.unwrap();
+    let response = CLIENT.get(target).send().await.unwrap();
 
     let stream = response.bytes_stream();
 
