@@ -1,5 +1,3 @@
-use std::{net::SocketAddr, time::Duration};
-
 use axum::{
     body::StreamBody,
     extract::{ConnectInfo, OriginalUri},
@@ -7,27 +5,25 @@ use axum::{
     routing::get,
     Router,
 };
-
+use once_cell::sync::Lazy;
+use reqwest::{self, Client};
+use std::{net::SocketAddr, time::Duration};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use reqwest::{self, Client};
-
-use once_cell::sync::Lazy;
-
-const USER_AGENT: &str = "tivimate";
-
 // HOST / SERVER ADDRESS
-const HOST_ADDR: &str = "0.0.0.0";
-const HOST_PORT: &str = "1081";
+const HOST_ADDR: &str = "0.0.0.0:1081";
+const HOST_USER: &str = "citrus";
+const HOST_PASS: &str = "fire";
+const USER_AGENT: &str = "tivimate";
 
 // TARGET
 const XT_ADDR: &str = "http://thelads.ddns.net:80";
 const XT_USER: &str = "jN9AhFAHmf";
 const XT_PASS: &str = "r9amExT7Qm";
 
-const USER: &str = "citrus";
-const PASS: &str = "fire";
-
+// Client can be re-used for each request
+// Has custom user agent
+// timeout to stop requests running forever (Unsure if needed?!)
 static CLIENT: Lazy<Client> = Lazy::new(|| {
     reqwest::Client::builder()
         .user_agent(USER_AGENT)
@@ -38,10 +34,11 @@ static CLIENT: Lazy<Client> = Lazy::new(|| {
 
 #[tokio::main]
 async fn main() {
+    // Create and start logger
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "xc_proxy=trace,tower_http=debug".into()),
+                .unwrap_or_else(|_| "xt_proxy=trace,tower_http=debug".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -49,32 +46,36 @@ async fn main() {
     // Create routes w/ states
     let app = Router::new().route("/*O", get(proxy));
 
-    let bind_address = format!("{}:{}", HOST_ADDR, HOST_PORT);
-    tracing::info!("listening on {bind_address}");
+    tracing::info!("Will re-write:\nUSER: {HOST_USER} => {XT_USER}\nPASS: {HOST_PASS} => {XT_PASS}\nlistening on {HOST_ADDR}");
 
     // Start Server
-    axum::Server::bind(&bind_address.parse().unwrap())
+    axum::Server::bind(&HOST_ADDR.parse().unwrap())
         .serve(app.into_make_service_with_connect_info::<SocketAddr>())
         .await
         .unwrap();
 }
 
+// proxy handler
 async fn proxy(
     OriginalUri(path): OriginalUri,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse {
-    // If using USER/PASS, replace it with XT_USER/XT_PASS
+    // Replace HOST_USER/PASS, WITH XT_USER/PASS
     let path = format!("{path}")
-        .replace(USER, XT_USER)
-        .replace(PASS, XT_PASS);
-
-    let target: String = format!("{XT_ADDR}{path}");
-
+        .replace(HOST_USER, XT_USER)
+        .replace(HOST_PASS, XT_PASS);
+    
     tracing::info!("{addr} => {path}");
 
+    // Form target from XT_ADDR and modified path
+    let target: String = format!("{XT_ADDR}{path}");
+
+    // send the get request, and await the response
     let response = CLIENT.get(target).send().await.unwrap();
 
+    // turn the response into a byte stream
     let stream = response.bytes_stream();
 
+    // return the byte stream, within a stream body
     StreamBody::new(stream)
 }
