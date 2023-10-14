@@ -9,3 +9,4 @@
 Cargo.lock
 target/CACHEDIR.TAG
 target/.rustc_info.json
+target/release/xt_proxy.d
