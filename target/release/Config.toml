@@ -1,0 +1,11 @@
+[host]
+address = "0.0.0.0:1081"
+user = "citrus"
+pass = "fire"
+user_agent = "tivimate"
+timeout = 300
+
+[xtream]
+address = "http://thelads.ddns.net:80"
+user = "jN9AhFAHmf"
+pass = "r9amExT7Qm"
