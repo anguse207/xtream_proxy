@@ -1,3 +1,5 @@
+pub mod config;
+
 use axum::{
     body::StreamBody,
     extract::{ConnectInfo, OriginalUri},
@@ -10,8 +12,11 @@ use reqwest::{self, Client};
 use std::{net::SocketAddr, time::Duration};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+use config::*;
+
 // HOST / SERVER ADDRESS
 const HOST_ADDR: &str = "0.0.0.0:1081";
+const PROXY_AUTH: bool = true;
 const HOST_USER: &str = "citrus";
 const HOST_PASS: &str = "fire";
 const USER_AGENT: &str = "tivimate";
@@ -32,6 +37,9 @@ static CLIENT: Lazy<Client> = Lazy::new(|| {
         .unwrap()
 });
 
+// Create config from file / create new file
+static _CONFIG: Lazy<Config> = Lazy::new(|| Config::new());
+
 #[tokio::main]
 async fn main() {
     // Create and start logger
@@ -42,6 +50,9 @@ async fn main() {
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
+
+    // Create config from file / create new file
+    let _config = Config::new();
 
     // Create routes w/ states
     let app = Router::new().route("/*O", get(proxy));
@@ -57,14 +68,18 @@ async fn main() {
 
 // proxy handler
 async fn proxy(
-    OriginalUri(path): OriginalUri,
+    OriginalUri(mut path): OriginalUri,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse {
+    if PROXY_AUTH {
+        path = format!("{path}")
+            .replace(HOST_USER, XT_USER)
+            .replace(HOST_PASS, XT_PASS)
+            .try_into()
+            .unwrap();
+    }
     // Replace HOST_USER/PASS, WITH XT_USER/PASS
-    let path = format!("{path}")
-        .replace(HOST_USER, XT_USER)
-        .replace(HOST_PASS, XT_PASS);
-    
+
     tracing::info!("{addr} => {path}");
 
     // Form target from XT_ADDR and modified path
