@@ -25,7 +25,7 @@ static CONFIG: Lazy<Config> = Lazy::new(Config::new);
 static CLIENT: Lazy<Client> = Lazy::new(|| {
     reqwest::Client::builder()
         .user_agent(&CONFIG.host.user_agent)
-        .timeout(Duration::from_secs(360))
+        .timeout(Duration::from_secs(CONFIG.host.timeout))
         .build()
         .unwrap()
 });

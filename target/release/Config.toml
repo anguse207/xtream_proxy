@@ -3,7 +3,7 @@ address = "0.0.0.0:1081"
 user = "citrus"
 pass = "fire"
 user_agent = "tivimate"
-timeout = 300
+timeout = 3600
 
 [xtream]
 address = "http://thelads.ddns.net:80"
