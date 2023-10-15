@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs;
+use std::process;
 use toml;
 
 const CONFIG: &str = "Config.toml";
@@ -17,38 +17,67 @@ const XT_ADDR: &str = "address:port";
 const XT_USER: &str = "user";
 const XT_PASS: &str = "pass";
 
+// #[derive(Debug, Serialize, Deserialize, Clone)]
+// pub struct Config {
+//     pub host: HashMap<String, String>,
+//     pub xtream: HashMap<String, String>,
+// }
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
-    pub host: HashMap<String, String>,
-    pub xtream: HashMap<String, String>,
+    pub host: Host,
+    pub xtream: Xtream,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Host {
+    pub address: String,
+    pub user: String,
+    pub pass: String,
+    pub user_agent: String,
+    pub timeout: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Xtream {
+    pub address: String,
+    pub user: String,
+    pub pass: String,
 }
 
 impl Config {
     fn create_default() -> Self {
-        let mut host: HashMap<String, String> = HashMap::new();
-        host.insert("user_agent".to_owned(), USER_AGENT.to_owned());
-        host.insert("address".to_owned(), HOST_ADDR.to_owned());
-        host.insert("user".to_owned(), HOST_USER.to_owned());
-        host.insert("pass".to_owned(), HOST_PASS.to_owned());
+        let host: Host = Host {
+            address: HOST_ADDR.to_owned(),
+            user: HOST_USER.to_owned(),
+            pass: HOST_PASS.to_owned(),
+            user_agent: USER_AGENT.to_owned(),
+            timeout: 300,
+        };
 
-        let mut xtream: HashMap<String, String> = HashMap::new();
-        xtream.insert("address".to_owned(), XT_ADDR.to_owned());
-        xtream.insert("user".to_owned(), XT_USER.to_owned());
-        xtream.insert("pass".to_owned(), XT_PASS.to_owned());
+        let xtream: Xtream = Xtream {
+            address: XT_ADDR.to_owned(),
+            user: XT_USER.to_owned(),
+            pass: XT_PASS.to_owned(),
+        };
 
         let default = Config { host, xtream };
 
-        let data = toml::to_string(&default).unwrap();
+        let serialized_data = toml::to_string(&default).unwrap();
 
-        let write_handle = fs::write(CONFIG, data);
+        let write_handle = fs::write(CONFIG, serialized_data);
 
         match write_handle {
-            Ok(_) => println!("Created new {CONFIG}, with defaults"),
+            Ok(_) => {
+                println!("Created new {CONFIG}\nEdit your {CONFIG} and then relaunch");
+                process::exit(0x0100);
+            }
             Err(e) => println!("Could NOT create {CONFIG}. \n{e}"),
         }
 
         default
     }
+
     pub fn new() -> Self {
         let read_handle = fs::read_to_string(CONFIG);
         let config: Config;

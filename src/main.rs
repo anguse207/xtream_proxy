@@ -14,31 +14,21 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use config::*;
 
-// HOST / SERVER ADDRESS
-const HOST_ADDR: &str = "0.0.0.0:1081";
 const PROXY_AUTH: bool = true;
-const HOST_USER: &str = "citrus";
-const HOST_PASS: &str = "fire";
-const USER_AGENT: &str = "tivimate";
 
-// TARGET
-const XT_ADDR: &str = "http://thelads.ddns.net:80";
-const XT_USER: &str = "jN9AhFAHmf";
-const XT_PASS: &str = "r9amExT7Qm";
+// Load config from file / create new file
+static CONFIG: Lazy<Config> = Lazy::new(Config::new);
 
 // Client can be re-used for each request
 // Has custom user agent
 // timeout to stop requests running forever (Unsure if needed?!)
 static CLIENT: Lazy<Client> = Lazy::new(|| {
     reqwest::Client::builder()
-        .user_agent(USER_AGENT)
+        .user_agent(&CONFIG.host.user_agent)
         .timeout(Duration::from_secs(360))
         .build()
         .unwrap()
 });
-
-// Create config from file / create new file
-static _CONFIG: Lazy<Config> = Lazy::new(|| Config::new());
 
 #[tokio::main]
 async fn main() {
@@ -51,16 +41,13 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Create config from file / create new file
-    let _config = Config::new();
-
     // Create routes w/ states
     let app = Router::new().route("/*O", get(proxy));
 
-    tracing::info!("Will re-write:\nUSER: {HOST_USER} => {XT_USER}\nPASS: {HOST_PASS} => {XT_PASS}\nlistening on {HOST_ADDR}");
+    tracing::info!("listening on {}", CONFIG.host.address);
 
     // Start Server
-    axum::Server::bind(&HOST_ADDR.parse().unwrap())
+    axum::Server::bind(&CONFIG.host.address.parse().unwrap())
         .serve(app.into_make_service_with_connect_info::<SocketAddr>())
         .await
         .unwrap();
@@ -72,18 +59,18 @@ async fn proxy(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse {
     if PROXY_AUTH {
+        // Replace HOST_USER/PASS, WITH XT_USER/PASS
         path = format!("{path}")
-            .replace(HOST_USER, XT_USER)
-            .replace(HOST_PASS, XT_PASS)
+            .replace(&CONFIG.host.user, &CONFIG.xtream.user)
+            .replace(&CONFIG.host.pass, &CONFIG.xtream.pass)
             .try_into()
             .unwrap();
     }
-    // Replace HOST_USER/PASS, WITH XT_USER/PASS
 
     tracing::info!("{addr} => {path}");
 
     // Form target from XT_ADDR and modified path
-    let target: String = format!("{XT_ADDR}{path}");
+    let target: String = format!("{}{path}", CONFIG.xtream.address);
 
     // send the get request, and await the response
     let response = CLIENT.get(target).send().await.unwrap();
